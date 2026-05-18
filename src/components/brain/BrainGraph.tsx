@@ -568,9 +568,10 @@ export default function BrainGraph() {
     group.add(outerMesh);
     group.add(innerMesh);
     
-    group.__curve = curve;
-    group.__outerMesh = outerMesh;
-    group.__innerMesh = innerMesh;
+    const g = group as any;
+    g.__curve = curve;
+    g.__outerMesh = outerMesh;
+    g.__innerMesh = innerMesh;
     
     // Guardar referencia para actualizarlo en el loop permanente
     linkObjectsRef.current.add({ link, group });
@@ -658,8 +659,9 @@ export default function BrainGraph() {
       const dist = sPos.distanceTo(tPos);
       if (dist < 1.0) return;
 
-      group.__curve.points[0].copy(sPos);
-      group.__curve.points[3].copy(tPos);
+      const g = group as any;
+      g.__curve.points[0].copy(sPos);
+      g.__curve.points[3].copy(tPos);
 
       const p1 = sPos.clone().lerp(tPos, 0.33);
       const p2 = sPos.clone().lerp(tPos, 0.66);
@@ -674,26 +676,26 @@ export default function BrainGraph() {
       p1.x += wiggle1; p1.z += wiggle2;
       p2.x -= wiggle2; p2.z += wiggle1; 
 
-      group.__curve.points[1].copy(p1);
-      group.__curve.points[2].copy(p2);
+      g.__curve.points[1].copy(p1);
+      g.__curve.points[2].copy(p2);
 
-      if (group.__outerMesh.geometry) group.__outerMesh.geometry.dispose();
-      if (group.__innerMesh.geometry) group.__innerMesh.geometry.dispose();
+      if (g.__outerMesh.geometry) g.__outerMesh.geometry.dispose();
+      if (g.__innerMesh.geometry) g.__innerMesh.geometry.dispose();
 
       const size = (sNode.size || 1) * 5;
 
-      const outerGeo = new THREE.TubeGeometry(group.__curve, 20, size * 0.45, 8, false);
-      taperLinkGeometry(outerGeo, group.__curve, 20, 8);
+      const outerGeo = new THREE.TubeGeometry(g.__curve, 20, size * 0.45, 8, false);
+      taperLinkGeometry(outerGeo, g.__curve, 20, 8);
 
-      const innerGeo = new THREE.TubeGeometry(group.__curve, 20, size * 0.15, 6, false);
-      taperLinkGeometry(innerGeo, group.__curve, 20, 6);
+      const innerGeo = new THREE.TubeGeometry(g.__curve, 20, size * 0.15, 6, false);
+      taperLinkGeometry(innerGeo, g.__curve, 20, 6);
 
-      group.__outerMesh.geometry = outerGeo;
-      group.__innerMesh.geometry = innerGeo;
+      g.__outerMesh.geometry = outerGeo;
+      g.__innerMesh.geometry = innerGeo;
 
       // Update shader uniforms for color gradient and energy bursts
-      const outerMat = group.__outerMesh.material as THREE.ShaderMaterial;
-      const innerMat = group.__innerMesh.material as THREE.ShaderMaterial;
+      const outerMat = g.__outerMesh.material as THREE.ShaderMaterial;
+      const innerMat = g.__innerMesh.material as THREE.ShaderMaterial;
       
       const sColor = new THREE.Color(sNode.color ?? '#00d4bf');
       const tColor = new THREE.Color(tNode.color ?? '#00d4bf');

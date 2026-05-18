@@ -59,7 +59,7 @@ export async function deriveKey(password: string, saltBase64: string): Promise<C
   // Import password as raw key material
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    encode(password),
+    encode(password) as BufferSource,
     'PBKDF2',
     false,
     ['deriveKey']
@@ -91,7 +91,7 @@ export async function encryptText(plaintext: string, key: CryptoKey): Promise<st
   const cipherBuffer = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
-    encoded
+    encoded as BufferSource
   );
 
   const ivB64 = bufferToBase64(iv.buffer);
@@ -164,7 +164,7 @@ export async function decryptBuffer(
  */
 export async function hashPassword(password: string): Promise<string> {
   const encoded = encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded as BufferSource);
   return bufferToBase64(hashBuffer);
 }
 

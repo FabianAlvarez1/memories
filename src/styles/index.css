@@ -1,0 +1,293 @@
+@import "tailwindcss";
+
+/* =========================================================
+   MEMORIES — Design System
+   Inspirado en Vercel: dark, minimal, premium
+   ========================================================= */
+
+/* --- Custom Theme Tokens --- */
+@theme {
+  /* Typography */
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', 'Courier New', monospace;
+
+  /* Brand Colors */
+  --color-brand-50:  #e0faf7;
+  --color-brand-100: #b3f4ec;
+  --color-brand-200: #80ede0;
+  --color-brand-300: #4de5d3;
+  --color-brand-400: #26ddc9;
+  --color-brand-500: #00d4bf;  /* Turquesa principal */
+  --color-brand-600: #00b8a4;
+  --color-brand-700: #009688;
+  --color-brand-800: #007a6e;
+  --color-brand-900: #005c53;
+
+  /* Backgrounds */
+  --color-bg-base:    #090909;
+  --color-bg-surface: #111111;
+  --color-bg-raised:  #1a1a1a;
+  --color-bg-overlay: #222222;
+  --color-bg-muted:   #2a2a2a;
+
+  /* Borders */
+  --color-border-subtle:  rgba(255, 255, 255, 0.06);
+  --color-border-normal:  rgba(255, 255, 255, 0.1);
+  --color-border-strong:  rgba(255, 255, 255, 0.18);
+  --color-border-brand:   rgba(0, 212, 191, 0.4);
+
+  /* Text */
+  --color-text-primary:   rgba(255, 255, 255, 0.95);
+  --color-text-secondary: rgba(255, 255, 255, 0.6);
+  --color-text-tertiary:  rgba(255, 255, 255, 0.35);
+  --color-text-brand:     #00d4bf;
+
+  /* Plutchik emotion colors */
+  --color-ecstasy:      #FFCC01;
+  --color-joy:          #FFE848;
+  --color-serenity:     #FFEF85;
+  --color-love:         #DCE359;
+  --color-admiration:   #80C630;
+  --color-trust:        #B7DC68;
+  --color-acceptance:   #D1E89A;
+  --color-submission:   #8BD073;
+  --color-terror:       #008738;
+  --color-fear:         #5DC27E;
+  --color-apprehension: #93D6AA;
+  --color-awe:          #53C6B5;
+  --color-amazement:    #0386AC;
+  --color-surprise:     #49CBED;
+  --color-distraction:  #87DEF2;
+  --color-disapproval:  #4AB3EC;
+  --color-grief:        #3C6DB0;
+  --color-sadness:      #4B9AE9;
+  --color-pensiveness:  #87BCF2;
+  --color-remorse:      #6D85DB;
+  --color-loathing:     #8154A6;
+  --color-disgust:      #9071CE;
+  --color-boredom:      #B4A2DE;
+  --color-contempt:     #BD719F;
+  --color-rage:         #E2403D;
+  --color-anger:        #E8706F;
+  --color-annoyance:    #F0A19D;
+  --color-aggressiveness: #F38763;
+  --color-vigilance:    #FF7D1D;
+  --color-anticipation: #FC9E58;
+  --color-interest:     #FEBF93;
+  --color-optimism:     #FFC351;
+}
+
+/* =========================================================
+   BASE RESET & GLOBALS
+   ========================================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* =========================================================
+   SELECTION
+   ========================================================= */
+::selection {
+  background: rgba(0, 212, 191, 0.25);
+  color: var(--color-text-primary);
+}
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* =========================================================
+   TYPOGRAPHY
+   ========================================================= */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+
+h1 { font-size: 2.25rem; }
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.375rem; }
+h4 { font-size: 1.125rem; }
+
+p { color: var(--color-text-secondary); }
+
+code, pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+a {
+  color: var(--color-text-brand);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+a:hover { opacity: 0.8; }
+
+/* =========================================================
+   GLASS MORPHISM UTILITY
+   ========================================================= */
+.glass {
+  background: rgba(17, 17, 17, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.glass-strong {
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid var(--color-border-normal);
+}
+
+/* =========================================================
+   GLOW EFFECTS (para neuronas y elementos de marca)
+   ========================================================= */
+.glow-brand {
+  box-shadow: 0 0 20px rgba(0, 212, 191, 0.3),
+              0 0 40px rgba(0, 212, 191, 0.1);
+}
+
+.glow-brand-text {
+  text-shadow: 0 0 20px rgba(0, 212, 191, 0.6);
+}
+
+/* =========================================================
+   ANIMATIONS
+   ========================================================= */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-brand {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 212, 191, 0.2); }
+  50%       { box-shadow: 0 0 25px rgba(0, 212, 191, 0.5); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+.animate-fade-in       { animation: fadeIn 0.4s ease forwards; }
+.animate-fade-in-scale { animation: fadeInScale 0.3s ease forwards; }
+.animate-pulse-brand   { animation: pulse-brand 2s ease-in-out infinite; }
+.animate-float         { animation: float 4s ease-in-out infinite; }
+.animate-spin-slow     { animation: spin-slow 8s linear infinite; }
+
+/* =========================================================
+   SKELETON LOADING
+   ========================================================= */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-raised) 25%,
+    var(--color-bg-overlay) 50%,
+    var(--color-bg-raised) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* =========================================================
+   GRADIENT BRAND
+   ========================================================= */
+.gradient-brand {
+  background: linear-gradient(135deg, #00d4bf 0%, #0386ac 100%);
+}
+
+.gradient-brand-text {
+  background: linear-gradient(135deg, #00d4bf 0%, #4ab3ec 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* =========================================================
+   DIVIDERS
+   ========================================================= */
+.divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  width: 100%;
+}
+
+/* =========================================================
+   BRAIN BACKGROUND CANVAS
+   ========================================================= */
+.brain-canvas-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse at center, #0d1117 0%, #090909 70%);
+}
+
+/* =========================================================
+   EMOTION INDICATOR
+   ========================================================= */
+.emotion-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}

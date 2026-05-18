@@ -2,6 +2,8 @@
 
 Under construction... A private, encrypted journal that keep safe forever and visualize your memories through time.
 
+Visit demo: https://memories-bay-three.vercel.app/
+
 ## What is this?
 
 Every memory you write becomes a **neuron** in your personal brain. Neurons connect based on shared emotions, people, or time proximity — forming a unique, organic map of your life that you can explore in 3D.

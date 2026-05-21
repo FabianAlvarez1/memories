@@ -89,3 +89,20 @@ export interface BrainGraph {
   nodes: MemoryNode[];
   links: MemoryLink[];
 }
+
+// Chunk-based navigation
+export interface ChunkData {
+  key: string;           // e.g. "2026-05-14_2026-05-21"
+  startDate: string;     // ISO string — inclusive
+  endDate: string;       // ISO string — inclusive
+  memories: Memory[];
+  loadedAt: number;      // Date.now() for LRU eviction
+}
+
+export interface MemoryIndexEntry {
+  id: string;
+  title: string;
+  emotion_id: string | null;
+  color: string;         // Plutchik color derived from emotion
+  created_at: string;
+}

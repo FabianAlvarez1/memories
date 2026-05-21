@@ -4,7 +4,8 @@
 
 import { db } from '../connection';
 import { encryptText, decryptText } from '../../crypto/keyDerivation';
-import type { Memory, MemoryRow, CreateMemoryInput, UpdateMemoryInput, MediaItem } from '@/types/memory';
+import type { Memory, MemoryRow, CreateMemoryInput, UpdateMemoryInput, MediaItem, MemoryIndexEntry } from '@/types/memory';
+import { getEmotionColor } from '@/utils/plutchikColors';
 import { v4 as uuidv4 } from 'uuid';
 
 export const MemoryRepository = {
@@ -149,6 +150,49 @@ export const MemoryRepository = {
     for (const r of tagRelations) {
       await db.delete('memory_tag', [r.memory_id, r.tag_id]);
     }
+  },
+
+  /**
+   * Get memories within a date range (chunk loading).
+   * Uses IndexedDB range query on the created_at index for efficiency.
+   */
+  async getByDateRange(startDate: string, endDate: string, cryptoKey: CryptoKey): Promise<Memory[]> {
+    const rows = await db.getByRange<MemoryRow>('memory', 'created_at', startDate, endDate);
+    const memories: Memory[] = [];
+
+    for (const row of rows) {
+      const memory = await this.hydrateRow(row, cryptoKey);
+      memories.push(memory);
+    }
+
+    return memories.sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  },
+
+  /**
+   * Get a lightweight index of all memories: only id, title, emotion_id, created_at.
+   * Decrypts titles but skips content/emotion_data/relations for speed.
+   * Used for global search and temporal navigation without full hydration.
+   */
+  async getLightIndex(cryptoKey: CryptoKey): Promise<MemoryIndexEntry[]> {
+    const rows = await db.getAll<MemoryRow>('memory');
+    const index: MemoryIndexEntry[] = [];
+
+    for (const row of rows) {
+      const title = await decryptText(row.title, cryptoKey).catch(() => '[cifrado]');
+      index.push({
+        id: row.id,
+        title,
+        emotion_id: row.emotion_id,
+        color: getEmotionColor(row.emotion_id),
+        created_at: row.created_at,
+      });
+    }
+
+    return index.sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   },
 
   /**

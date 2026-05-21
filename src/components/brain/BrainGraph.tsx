@@ -87,12 +87,12 @@ function taperTubeGeometry(tubeGeo: THREE.TubeGeometry, curve: THREE.CatmullRomC
   for (let i = 0; i < pos.count; i++) {
     const segment = Math.floor(i / (radialSegments + 1));
     const t = segment / tubularSegments;
-    const taper = Math.pow(1.0 - t, 1.5); 
+    const taper = Math.pow(1.0 - t, 1.5);
     const center = curve.getPointAt(t);
     pos.setXYZ(
-      i, 
-      center.x + (pos.getX(i) - center.x) * taper, 
-      center.y + (pos.getY(i) - center.y) * taper, 
+      i,
+      center.x + (pos.getX(i) - center.x) * taper,
+      center.y + (pos.getY(i) - center.y) * taper,
       center.z + (pos.getZ(i) - center.z) * taper
     );
   }
@@ -103,51 +103,45 @@ function taperLinkGeometry(tubeGeo: THREE.TubeGeometry, curve: THREE.CatmullRomC
   const pos = tubeGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const segment = Math.floor(i / (radialSegments + 1));
-    const t = segment / tubularSegments; 
+    const t = segment / tubularSegments;
     // Estrechamiento biológico: grueso en las puntas (1.0), más fino en el centro (0.35)
-    const thickness = 0.35 + 0.65 * Math.pow(Math.abs(t - 0.5) * 2.0, 2.0); 
+    const thickness = 0.35 + 0.65 * Math.pow(Math.abs(t - 0.5) * 2.0, 2.0);
     const center = curve.getPointAt(t);
     pos.setXYZ(
-      i, 
-      center.x + (pos.getX(i) - center.x) * thickness, 
-      center.y + (pos.getY(i) - center.y) * thickness, 
+      i,
+      center.x + (pos.getX(i) - center.x) * thickness,
+      center.y + (pos.getY(i) - center.y) * thickness,
       center.z + (pos.getZ(i) - center.z) * thickness
     );
   }
   tubeGeo.computeVertexNormals();
 }
 
-export default function BrainGraph() {
+export default function BrainGraph({ showChunkBounds = false }: { showChunkBounds?: boolean }) {
   const graphRef = useRef<any>(null);
   const linkObjectsRef = useRef(new Set<any>());
-  const { brainGraph, selectMemory, viewDate } = useMemoryStore();
+  const { brainGraph, selectMemory, viewDate, loadedChunks } = useMemoryStore();
 
   const graphData = useMemo<GraphData>(() => {
     const vd = new Date(viewDate);
-    const windowStart = new Date(vd);
-    windowStart.setDate(windowStart.getDate() - 5);
 
-    // Filter nodes within the 5-day window
-    const filteredNodes = brainGraph.nodes
-      .filter(n => {
-        const d = new Date(n.created_at);
-        return d >= windowStart && d <= vd;
-      })
-      .map(n => {
-        const d = new Date(n.created_at);
-        const daysDiff = (vd.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
-        // Recent (0 days) → fz=0 (front), Oldest (5 days) → fz=-500 (deep)
-        const fz = -daysDiff * 100;
-        return { ...n, fz };
-      });
+    // Nodes come pre-filtered from loaded chunks via the store.
+    // We just compute Z-position for temporal depth.
+    const positionedNodes = brainGraph.nodes.map(n => {
+      const d = new Date(n.created_at);
+      const daysDiff = (vd.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+      // Recent (0 days) → fz=0 (front), Older → deeper
+      const fz = -daysDiff * 100;
+      return { ...n, fz };
+    });
 
-    // Only include links between visible nodes
-    const nodeIds = new Set(filteredNodes.map(n => n.id));
+    // Links are already filtered to visible nodes by the store's buildGraph
+    const nodeIds = new Set(positionedNodes.map(n => n.id));
     const filteredLinks = brainGraph.links
       .filter(l => nodeIds.has(l.source as string) && nodeIds.has(l.target as string))
       .map(l => ({ ...l, source: l.source, target: l.target }));
 
-    return { nodes: filteredNodes, links: filteredLinks };
+    return { nodes: positionedNodes, links: filteredLinks };
   }, [brainGraph, viewDate]);
 
   const mouseRef = useRef(new THREE.Vector2(-9999, -9999));
@@ -169,13 +163,13 @@ export default function BrainGraph() {
 
     try {
       const scene = graph.scene();
-      
+
       if (!scene.getObjectByName('ambientLight')) {
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
         ambientLight.name = 'ambientLight';
         scene.add(ambientLight);
       }
-      
+
       // Eliminar el polvo viejo para que los cambios se reflejen en vivo (HMR)
       const oldDust = scene.getObjectByName('neuralDust');
       if (oldDust) {
@@ -188,23 +182,23 @@ export default function BrainGraph() {
         for (let i = 0; i < count; i++) {
           const i3 = i * 3;
           posArray[i3] = (Math.random() - 0.5) * spread;
-          posArray[i3+1] = (Math.random() - 0.5) * spread;
-          posArray[i3+2] = (Math.random() - 0.5) * spread;
+          posArray[i3 + 1] = (Math.random() - 0.5) * spread;
+          posArray[i3 + 2] = (Math.random() - 0.5) * spread;
           const color = new THREE.Color();
           // Hacer los colores un poco más saturados y brillantes
           color.setHSL(Math.random(), 0.9, 0.5 + Math.random() * 0.5);
           colorArray[i3] = color.r;
-          colorArray[i3+1] = color.g;
-          colorArray[i3+2] = color.b;
+          colorArray[i3 + 1] = color.g;
+          colorArray[i3 + 2] = color.b;
         }
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
         geo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
-        
+
         const mat = new THREE.ShaderMaterial({
           uniforms: {
             time: { value: 0 },
-            mouseWorld: { value: new THREE.Vector3(0,0,0) },
+            mouseWorld: { value: new THREE.Vector3(0, 0, 0) },
             tex: { value: getGlowTexture() },
             baseSize: { value: size },
             opacity: { value: opacity }
@@ -256,21 +250,123 @@ export default function BrainGraph() {
         });
         return new THREE.Points(geo, mat);
       };
-      
+
       const dustGroup = new THREE.Group();
       dustGroup.name = 'neuralDust';
-      
+
       // Densidad extrema: Redujimos la dispersión (spread) a 4000 para concentrarlas
       // y aumentamos masivamente el tamaño (size) de 3/6/14 a 15/30/60
       dustGroup.add(createDustLayer(20000, 6, 3000, 0.2));
       dustGroup.add(createDustLayer(10000, 12, 3000, 0.2));
-      dustGroup.add(createDustLayer(4000,  15, 3000, 0.2));
-      
+      dustGroup.add(createDustLayer(4000, 15, 3000, 0.2));
+
       scene.add(dustGroup);
-    } catch(err) {
+    } catch (err) {
       console.error('Error setting up brain environment:', err);
     }
   }, [graphData]);
+
+  // Chunk boundary wireframe boxes
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) return;
+    const scene = graph.scene();
+
+    // Remove old chunk bounds
+    const oldGroup = scene.getObjectByName('chunkBounds');
+    if (oldGroup) scene.remove(oldGroup);
+
+    if (!showChunkBounds) return;
+
+    const boundsGroup = new THREE.Group();
+    boundsGroup.name = 'chunkBounds';
+    const vd = new Date(viewDate);
+    const SPREAD = 350; // XY extent of each box
+
+    loadedChunks.forEach((chunk) => {
+      const startDays = (vd.getTime() - new Date(chunk.endDate).getTime()) / (1000 * 60 * 60 * 24);
+      const endDays = (vd.getTime() - new Date(chunk.startDate).getTime()) / (1000 * 60 * 60 * 24);
+      const zFront = -startDays * 100;
+      const zBack = -endDays * 100;
+      const depth = Math.abs(zBack - zFront);
+      const zCenter = (zFront + zBack) / 2;
+
+      // Is this the chunk containing the current viewDate?
+      const isCurrentChunk = new Date(chunk.startDate) <= vd && vd <= new Date(chunk.endDate);
+      const edgeColor = isCurrentChunk ? 0x00d4bf : 0x335566;
+      const edgeOpacity = isCurrentChunk ? 0.45 : 0.2;
+
+      // Wireframe box
+      const boxGeo = new THREE.BoxGeometry(SPREAD * 2, SPREAD * 2, depth);
+      const edges = new THREE.EdgesGeometry(boxGeo);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: edgeColor,
+        transparent: true,
+        opacity: edgeOpacity,
+        depthWrite: false,
+      });
+      const wireframe = new THREE.LineSegments(edges, lineMat);
+      wireframe.position.set(0, 0, zCenter);
+      boundsGroup.add(wireframe);
+
+      // Translucent face for the "front" wall of each chunk (newest date)
+      const faceGeo = new THREE.PlaneGeometry(SPREAD * 2, SPREAD * 2);
+      const faceMat = new THREE.MeshBasicMaterial({
+        color: edgeColor,
+        transparent: true,
+        opacity: isCurrentChunk ? 0.04 : 0.02,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const face = new THREE.Mesh(faceGeo, faceMat);
+      face.position.set(0, 0, zFront);
+      boundsGroup.add(face);
+
+      // Date label sprite
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, 512, 64);
+      ctx.font = '600 28px system-ui, sans-serif';
+      ctx.fillStyle = isCurrentChunk ? '#00d4bf' : '#556677';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const sLabel = new Date(chunk.startDate).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+      const eLabel = new Date(chunk.endDate).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+      ctx.fillText(`${sLabel} — ${eLabel}`, 256, 32);
+
+      const labelTex = new THREE.CanvasTexture(canvas);
+      const labelMat = new THREE.SpriteMaterial({
+        map: labelTex,
+        transparent: true,
+        opacity: isCurrentChunk ? 0.7 : 0.35,
+        depthWrite: false,
+      });
+      const label = new THREE.Sprite(labelMat);
+      label.scale.set(200, 25, 1);
+      label.position.set(0, SPREAD + 30, zFront);
+      boundsGroup.add(label);
+
+      boxGeo.dispose();
+    });
+
+    scene.add(boundsGroup);
+
+    return () => {
+      const g = scene.getObjectByName('chunkBounds');
+      if (g) {
+        g.traverse((obj: any) => {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (obj.material.map) obj.material.map.dispose();
+            obj.material.dispose();
+          }
+        });
+        scene.remove(g);
+      }
+    };
+  }, [showChunkBounds, viewDate, loadedChunks]);
 
   // Ultra-Realistic Biological Procedural Neuron Generator
   const nodeThreeObject = useCallback((node: any) => {
@@ -278,7 +374,7 @@ export default function BrainGraph() {
     const group = new THREE.Group();
     container.add(group);
     const size = (node.size ?? 1) * 5; // Larger scale for intricate details
-    
+
     // Derived Colors based on the reference image style
     const primaryColor = new THREE.Color(node.color ?? '#00d4bf');
     const accentColor = new THREE.Color('#ff7700').lerp(primaryColor, 0.15); // Golden/Orange fire core
@@ -306,7 +402,7 @@ export default function BrainGraph() {
     const somaGeo = new THREE.SphereGeometry(size, 64, 64);
     const pos = somaGeo.attributes.position;
     const v = new THREE.Vector3();
-    for(let i=0; i<pos.count; i++) {
+    for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
       // Smooth 3D noise distortion (no spikes)
       const noise = 1 + (Math.sin(v.x * 0.15) * Math.cos(v.y * 0.15) * Math.sin(v.z * 0.15)) * 0.15;
@@ -314,7 +410,7 @@ export default function BrainGraph() {
       pos.setXYZ(i, v.x, v.y, v.z);
     }
     somaGeo.computeVertexNormals();
-    
+
     const somaMat = new THREE.MeshPhongMaterial({
       color: primaryColor,
       transparent: true,
@@ -330,7 +426,7 @@ export default function BrainGraph() {
     // 3. Sprawling Dendrites & Axons (The complex neural web)
     const curves: THREE.CatmullRomCurve3[] = [];
     const numMainBranches = 12 + Math.floor(Math.random() * 8); // Heavy branching
-    
+
     const branchMatInner = new THREE.MeshBasicMaterial({
       color: accentColor,
       blending: THREE.AdditiveBlending,
@@ -345,57 +441,57 @@ export default function BrainGraph() {
       roughness: 0.3
     });
 
-    for(let i=0; i<numMainBranches; i++) {
+    for (let i = 0; i < numMainBranches; i++) {
       // Directions spread radially
       const startDir = new THREE.Vector3(
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2,
         (Math.random() - 0.5) * 2
       ).normalize();
-      
+
       const points = [];
       let cur = startDir.clone().multiplyScalar(size * 0.6); // Start slightly inside the membrane
       points.push(cur.clone());
-      
+
       const length = size * (3 + Math.random() * 6); // Extremely long tentacles
       const steps = 8;
-      
-      for(let j=0; j<steps; j++) {
-        const wander = new THREE.Vector3((Math.random()-0.5)*1.8, (Math.random()-0.5)*1.8, (Math.random()-0.5)*1.8);
+
+      for (let j = 0; j < steps; j++) {
+        const wander = new THREE.Vector3((Math.random() - 0.5) * 1.8, (Math.random() - 0.5) * 1.8, (Math.random() - 0.5) * 1.8);
         const stepVec = startDir.clone().add(wander).normalize().multiplyScalar(length / steps);
         cur.add(stepVec);
         points.push(cur.clone());
 
         // Generate Sub-branches organically
         if (Math.random() > 0.4 && j > 1 && j < steps - 1) {
-           const subPoints = [cur.clone()];
-           let subCur = cur.clone();
-           const subDir = stepVec.clone().applyAxisAngle(new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize(), Math.PI/2.2).normalize();
-           for(let k=0; k<4; k++) {
-              const subWander = new THREE.Vector3((Math.random()-0.5), (Math.random()-0.5), (Math.random()-0.5));
-              subCur.add(subDir.clone().add(subWander).normalize().multiplyScalar((length/steps)*0.8));
-              subPoints.push(subCur.clone());
-           }
-           const subCurve = new THREE.CatmullRomCurve3(subPoints);
-           curves.push(subCurve);
-           
-           const subTubeGeo = new THREE.TubeGeometry(subCurve, 12, size * 0.05, 5, false);
-           taperTubeGeometry(subTubeGeo, subCurve, 12, 5);
-           group.add(new THREE.Mesh(subTubeGeo, branchMatOuter));
-           const subTubeInnerGeo = new THREE.TubeGeometry(subCurve, 12, size * 0.02, 4, false);
-           taperTubeGeometry(subTubeInnerGeo, subCurve, 12, 4);
-           group.add(new THREE.Mesh(subTubeInnerGeo, branchMatInner));
+          const subPoints = [cur.clone()];
+          let subCur = cur.clone();
+          const subDir = stepVec.clone().applyAxisAngle(new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize(), Math.PI / 2.2).normalize();
+          for (let k = 0; k < 4; k++) {
+            const subWander = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5));
+            subCur.add(subDir.clone().add(subWander).normalize().multiplyScalar((length / steps) * 0.8));
+            subPoints.push(subCur.clone());
+          }
+          const subCurve = new THREE.CatmullRomCurve3(subPoints);
+          curves.push(subCurve);
+
+          const subTubeGeo = new THREE.TubeGeometry(subCurve, 12, size * 0.05, 5, false);
+          taperTubeGeometry(subTubeGeo, subCurve, 12, 5);
+          group.add(new THREE.Mesh(subTubeGeo, branchMatOuter));
+          const subTubeInnerGeo = new THREE.TubeGeometry(subCurve, 12, size * 0.02, 4, false);
+          taperTubeGeometry(subTubeInnerGeo, subCurve, 12, 4);
+          group.add(new THREE.Mesh(subTubeInnerGeo, branchMatInner));
         }
       }
-      
+
       const curve = new THREE.CatmullRomCurve3(points);
       curves.push(curve);
-      
+
       // Main branch tubes
       const tubeGeo = new THREE.TubeGeometry(curve, 24, size * 0.12, 6, false);
       taperTubeGeometry(tubeGeo, curve, 24, 6);
       group.add(new THREE.Mesh(tubeGeo, branchMatOuter));
-      
+
       const innerTubeGeo = new THREE.TubeGeometry(curve, 24, size * 0.05, 5, false);
       taperTubeGeometry(innerTubeGeo, curve, 24, 5);
       group.add(new THREE.Mesh(innerTubeGeo, branchMatInner));
@@ -420,16 +516,16 @@ export default function BrainGraph() {
     const particleGeo = new THREE.BufferGeometry();
     const particlePos = new Float32Array(numParticles * 3);
     const particleSizes = new Float32Array(numParticles);
-    
+
     const sizeMultipliers = [1.0, 1.5, 2.0];
 
-    for(let i=0; i<numParticles; i++) {
+    for (let i = 0; i < numParticles; i++) {
       particleSizes[i] = sizeMultipliers[Math.floor(Math.random() * sizeMultipliers.length)];
     }
 
     particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
     particleGeo.setAttribute('sizeMultiplier', new THREE.BufferAttribute(particleSizes, 1));
-    
+
     const particleMat = new THREE.ShaderMaterial({
       uniforms: {
         tex: { value: tex },
@@ -455,12 +551,12 @@ export default function BrainGraph() {
       transparent: true,
       depthWrite: false
     });
-    
+
     const particles = new THREE.Points(particleGeo, particleMat);
     group.add(particles);
 
     const particleData: any[] = [];
-    for(let i=0; i<numParticles; i++) {
+    for (let i = 0; i < numParticles; i++) {
       const curve = curves[i % curves.length];
       particleData.push({
         curve,
@@ -474,7 +570,7 @@ export default function BrainGraph() {
       innerGroup: group,
       soma, nucleus, orangeCore, particles, particleData,
       offset: Math.random() * Math.PI * 2,
-      rotationSpeed: new THREE.Vector3((Math.random()-0.5)*0.003, (Math.random()-0.5)*0.003, (Math.random()-0.5)*0.003),
+      rotationSpeed: new THREE.Vector3((Math.random() - 0.5) * 0.003, (Math.random() - 0.5) * 0.003, (Math.random() - 0.5) * 0.003),
       floatTime: Math.random() * 100,
       floatSpeed: new THREE.Vector3(0.5 + Math.random(), 0.5 + Math.random(), 0.5 + Math.random()).multiplyScalar(0.01)
     };
@@ -485,14 +581,14 @@ export default function BrainGraph() {
 
   const linkThreeObject = useCallback((link: any) => {
     const group = new THREE.Group();
-    
+
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, 0)
     ]);
-    
+
     const vertexShader = `
       varying vec2 vUv;
       void main() {
@@ -562,20 +658,20 @@ export default function BrainGraph() {
       transparent: false,
       depthWrite: true
     });
-    
+
     const outerMesh = new THREE.Mesh(new THREE.BufferGeometry(), branchMatOuter);
     const innerMesh = new THREE.Mesh(new THREE.BufferGeometry(), branchMatInner);
     group.add(outerMesh);
     group.add(innerMesh);
-    
+
     const g = group as any;
     g.__curve = curve;
     g.__outerMesh = outerMesh;
     g.__innerMesh = innerMesh;
-    
+
     // Guardar referencia para actualizarlo en el loop permanente
     linkObjectsRef.current.add({ link, group });
-    
+
     return group;
   }, []);
 
@@ -585,14 +681,14 @@ export default function BrainGraph() {
     sprite.position.set(0, 0, 0);
     sprite.rotation.set(0, 0, 0);
     sprite.scale.set(1, 1, 1);
-    return true; 
+    return true;
   }, []);
 
   // The Heartbeat & Energy Flow Animation
   const handleVisualTick = useCallback(() => {
     const time = Date.now() * 0.001;
     nucleusUniforms.time.value = time;
-    
+
     graphData.nodes.forEach((node: any) => {
       const obj = node.__threeObj;
       const data = node.__animData;
@@ -618,19 +714,19 @@ export default function BrainGraph() {
 
         // Continuous and random electricity animation in dendrites
         const positions = data.particles.geometry.attributes.position.array;
-        for(let i=0; i<data.particleData.length; i++) {
+        for (let i = 0; i < data.particleData.length; i++) {
           const p = data.particleData[i];
           p.t += p.speed;
           if (p.t > 1) {
             p.t = 0; // Loop particle back to soma
             p.speed = 0.002 + Math.random() * 0.006;
           }
-          
+
           const point = p.curve.getPointAt(p.t);
           const jitter = 0.3; // Menos agresiva
-          positions[i*3] = point.x + (Math.random() - 0.5) * jitter;
-          positions[i*3+1] = point.y + (Math.random() - 0.5) * jitter;
-          positions[i*3+2] = point.z + (Math.random() - 0.5) * jitter;
+          positions[i * 3] = point.x + (Math.random() - 0.5) * jitter;
+          positions[i * 3 + 1] = point.y + (Math.random() - 0.5) * jitter;
+          positions[i * 3 + 2] = point.z + (Math.random() - 0.5) * jitter;
         }
         data.particles.geometry.attributes.position.needsUpdate = true;
       }
@@ -674,7 +770,7 @@ export default function BrainGraph() {
       const wiggle2 = Math.cos(time * 0.5 + tPos.z) * dist * 0.05;
 
       p1.x += wiggle1; p1.z += wiggle2;
-      p2.x -= wiggle2; p2.z += wiggle1; 
+      p2.x -= wiggle2; p2.z += wiggle1;
 
       g.__curve.points[1].copy(p1);
       g.__curve.points[2].copy(p2);
@@ -696,10 +792,10 @@ export default function BrainGraph() {
       // Update shader uniforms for color gradient and energy bursts
       const outerMat = g.__outerMesh.material as THREE.ShaderMaterial;
       const innerMat = g.__innerMesh.material as THREE.ShaderMaterial;
-      
+
       const sColor = new THREE.Color(sNode.color ?? '#00d4bf');
       const tColor = new THREE.Color(tNode.color ?? '#00d4bf');
-      
+
       if (outerMat.uniforms) {
         outerMat.uniforms.sourceColor.value.copy(sColor);
         outerMat.uniforms.targetColor.value.copy(tColor);
@@ -714,7 +810,7 @@ export default function BrainGraph() {
     if (graphRef.current) {
       const scene = graphRef.current.scene();
       const camera = graphRef.current.camera();
-      
+
       // Proyectar el mouse al plano 3D (Z=0) para la repulsión
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouseRef.current, camera);
@@ -730,7 +826,7 @@ export default function BrainGraph() {
         // Rotación general incrementada (1.5x)
         dust.rotation.y = time * 0.015;
         dust.rotation.x = time * 0.0075;
-        
+
         // Actualizar uniforms de los Shaders de partículas
         dust.children.forEach((layer: any) => {
           if (layer.material.uniforms) {

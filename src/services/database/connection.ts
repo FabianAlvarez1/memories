@@ -186,6 +186,24 @@ class MemoriesDatabase {
       req.onerror = () => reject(req.error);
     });
   }
+
+  /**
+   * Range query on an index — returns all rows where index value is
+   * between lower and upper (inclusive).
+   * Used by chunk loading to query memories by created_at range.
+   */
+  getByRange<T>(storeName: string, indexName: string, lower: IDBValidKey, upper: IDBValidKey): Promise<T[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) return reject(new Error('DB not initialized'));
+      const tx = this.db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const index = store.index(indexName);
+      const range = IDBKeyRange.bound(lower, upper);
+      const req = index.getAll(range);
+      req.onsuccess = () => resolve(req.result as T[]);
+      req.onerror = () => reject(req.error);
+    });
+  }
 }
 
 // Singleton

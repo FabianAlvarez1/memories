@@ -1,12 +1,13 @@
 // =========================================================
 // BRAIN PAGE — Main 3D neuron graph visualization
+// Chunk-based temporal navigation
 // =========================================================
 
 import { useEffect, useRef, useState, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useMemoryStore } from '@/store/useMemoryStore';
+import { useMemoryStore, CHUNK_SIZE } from '@/store/useMemoryStore';
 
 // Lazy load the heavy 3D graph
 const BrainGraph = lazy(() => import('@/components/brain/BrainGraph'));
@@ -14,20 +15,30 @@ const BrainGraph = lazy(() => import('@/components/brain/BrainGraph'));
 export default function BrainPage() {
   const navigate = useNavigate();
   const { user, cryptoKey, logout } = useAuthStore();
-  const { loadMemories, memories, isLoading, selectedMemoryId, selectMemory,
-          viewDate, navigateTime, oldestMemoryDate, setViewDate,
-          jumpToNextMemory, jumpToPrevMemory } = useMemoryStore();
+  const { initialize, visibleMemories, isLoading, selectedMemoryId, selectMemory,
+    viewDate, navigateChunk, navigateDay, oldestMemoryDate, setViewDate,
+    jumpToNextMemory, jumpToPrevMemory, memoryIndex, loadingChunks,
+    ensureChunksLoaded } = useMemoryStore();
   const hasLoaded = useRef(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showChunkBounds, setShowChunkBounds] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // Initialize — load lightweight index + initial chunks
   useEffect(() => {
     if (cryptoKey && !hasLoaded.current) {
       hasLoaded.current = true;
-      loadMemories(cryptoKey);
+      initialize(cryptoKey);
     }
-  }, [cryptoKey, loadMemories]);
+  }, [cryptoKey, initialize]);
+
+  // When viewDate changes, ensure chunks are loaded around it
+  useEffect(() => {
+    if (cryptoKey && hasLoaded.current) {
+      ensureChunksLoaded(cryptoKey);
+    }
+  }, [viewDate, cryptoKey, ensureChunksLoaded]);
 
   useEffect(() => {
     if (selectedMemoryId) {
@@ -41,17 +52,17 @@ export default function BrainPage() {
     navigate('/login');
   }
 
-  // Temporal navigation: Shift+Scroll or Arrow keys
+  // Temporal navigation: Shift+Scroll for chunks, plain arrows for days
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.shiftKey) {
         e.preventDefault();
-        navigateTime(e.deltaY > 0 ? -1 : 1);
+        navigateChunk(e.deltaY > 0 ? -1 : 1);
       }
     };
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown' && e.shiftKey) { navigateTime(-1); e.preventDefault(); }
-      if (e.key === 'ArrowUp' && e.shiftKey) { navigateTime(1); e.preventDefault(); }
+      if (e.key === 'ArrowDown' && e.shiftKey) { navigateChunk(-1); e.preventDefault(); }
+      if (e.key === 'ArrowUp' && e.shiftKey) { navigateChunk(1); e.preventDefault(); }
     };
     window.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('keydown', handleKey);
@@ -59,30 +70,30 @@ export default function BrainPage() {
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('keydown', handleKey);
     };
-  }, [navigateTime]);
+  }, [navigateChunk]);
 
   // Computed temporal info
   const vd = new Date(viewDate);
   const windowStart = new Date(vd);
-  windowStart.setDate(windowStart.getDate() - 5);
+  windowStart.setDate(windowStart.getDate() - CHUNK_SIZE);
   const isToday = new Date().toDateString() === vd.toDateString();
   const canGoDeeper = oldestMemoryDate ? new Date(oldestMemoryDate) < windowStart : false;
 
-  // Check if there are memories outside the current window for jump buttons
-  const hasNewerMemory = memories.some(m => new Date(m.created_at) > vd);
-  const hasOlderMemory = memories.some(m => new Date(m.created_at) < windowStart);
+  // Jump buttons use the lightweight index (all memories, not just visible)
+  const hasNewerMemory = memoryIndex.some(m => new Date(m.created_at) > vd);
+  const hasOlderMemory = memoryIndex.some(m => new Date(m.created_at) < windowStart);
 
-  // Search logic
+  // Search logic — uses memoryIndex (lightweight, all titles)
   const searchResults = searchQuery.trim().length > 0
-    ? memories.filter(m => {
-        const q = searchQuery.toLowerCase();
-        const titleMatch = m.title.toLowerCase().includes(q);
-        const dateStr = new Date(m.created_at).toLocaleDateString('es', {
-          day: 'numeric', month: 'long', year: 'numeric'
-        }).toLowerCase();
-        const dateMatch = dateStr.includes(q);
-        return titleMatch || dateMatch;
-      }).slice(0, 8) // Max 8 results
+    ? memoryIndex.filter(m => {
+      const q = searchQuery.toLowerCase();
+      const titleMatch = m.title.toLowerCase().includes(q);
+      const dateStr = new Date(m.created_at).toLocaleDateString('es', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      }).toLowerCase();
+      const dateMatch = dateStr.includes(q);
+      return titleMatch || dateMatch;
+    }).slice(0, 8) // Max 8 results
     : [];
 
   function handleSearchSelect(memoryId: string, memoryDate: string) {
@@ -105,6 +116,9 @@ export default function BrainPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Is a chunk loading right now?
+  const isChunkLoading = loadingChunks.size > 0;
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--color-bg-base)', overflow: 'hidden' }}>
 
@@ -123,7 +137,7 @@ export default function BrainPage() {
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-0.02em' }}
-                className="gradient-brand-text">
+            className="gradient-brand-text">
             Memories
           </span>
           <span style={{
@@ -131,8 +145,25 @@ export default function BrainPage() {
             background: 'rgba(255,255,255,0.06)', borderRadius: 4,
             padding: '2px 7px', border: '1px solid var(--color-border-subtle)',
           }}>
-            {memories.length} {memories.length === 1 ? 'memoria' : 'memorias'}
+            {memoryIndex.length} {memoryIndex.length === 1 ? 'memoria' : 'memorias'}
           </span>
+          {/* Chunk loading indicator */}
+          {isChunkLoading && (
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{
+                fontSize: 10, color: '#00d4bf',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              <span className="animate-spin-slow" style={{
+                width: 10, height: 10, border: '1.5px solid rgba(0,212,191,0.2)',
+                borderTopColor: '#00d4bf', borderRadius: '50%', display: 'inline-block',
+              }} />
+              cargando...
+            </motion.span>
+          )}
         </div>
 
         {/* Search Bar */}
@@ -201,8 +232,7 @@ export default function BrainPage() {
                     {/* Emotion dot */}
                     <div style={{
                       width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                      background: m.emotion_analysis?.primary_emotion_id
-                        ? 'var(--color-accent-teal)' : 'var(--color-text-tertiary)',
+                      background: m.color || 'var(--color-text-tertiary)',
                     }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
@@ -302,11 +332,11 @@ export default function BrainPage() {
 
       {/* 3D Brain Graph */}
       <Suspense fallback={<BrainLoading />}>
-        <BrainGraph />
+        <BrainGraph showChunkBounds={showChunkBounds} />
       </Suspense>
 
       {/* Temporal Navigation Panel */}
-      {memories.length > 0 && (
+      {memoryIndex.length > 0 && (
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -316,7 +346,7 @@ export default function BrainPage() {
             zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
             background: 'rgba(9,9,9,0.8)', backdropFilter: 'blur(14px)',
             border: '1px solid var(--color-border-subtle)', borderRadius: 14,
-            padding: '14px 10px', minWidth: 90,
+            padding: '14px 10px', minWidth: 100,
           }}
         >
           {/* Jump to next memory (skip) */}
@@ -333,17 +363,17 @@ export default function BrainPage() {
             title="Saltar a siguiente memoria"
           >⏫</button>
 
-          {/* Go newer (up) — 1 day */}
+          {/* Go newer (up) — 1 chunk (7 days) */}
           <button
             id="btn-time-newer"
-            onClick={() => navigateTime(1)}
+            onClick={() => navigateChunk(1)}
             disabled={isToday}
             style={{
               ...timeBtnStyle,
               opacity: isToday ? 0.25 : 1,
               cursor: isToday ? 'default' : 'pointer',
             }}
-            title="+1 día"
+            title={`+${CHUNK_SIZE} días`}
           >▲</button>
 
           {/* Date range display */}
@@ -367,17 +397,17 @@ export default function BrainPage() {
             )}
           </div>
 
-          {/* Go older (down) — 1 day */}
+          {/* Go older (down) — 1 chunk (7 days) */}
           <button
             id="btn-time-older"
-            onClick={() => navigateTime(-1)}
+            onClick={() => navigateChunk(-1)}
             disabled={!canGoDeeper}
             style={{
               ...timeBtnStyle,
               opacity: canGoDeeper ? 1 : 0.25,
               cursor: canGoDeeper ? 'pointer' : 'default',
             }}
-            title="-1 día"
+            title={`-${CHUNK_SIZE} días`}
           >▼</button>
 
           {/* Jump to prev memory (skip) */}
@@ -394,12 +424,46 @@ export default function BrainPage() {
             title="Saltar a memoria anterior"
           >⏬</button>
 
-          <span style={{ fontSize: 8, color: 'var(--color-text-tertiary)', marginTop: 2, opacity: 0.6 }}>Shift+Scroll</span>
+          {/* Chunk info */}
+          <div style={{
+            fontSize: 8, color: 'var(--color-text-tertiary)', marginTop: 2,
+            opacity: 0.6, textAlign: 'center', lineHeight: 1.4,
+          }}>
+            <div>Shift+Scroll</div>
+            <div style={{ marginTop: 2, color: 'rgba(0,212,191,0.5)' }}>
+              {visibleMemories.length} visible{visibleMemories.length !== 1 ? 's' : ''}
+            </div>
+          </div>
         </motion.div>
       )}
 
+      {/* Chunk bounds toggle — bottom left */}
+      {memoryIndex.length > 0 && (
+        <motion.button
+          id="btn-toggle-chunk-bounds"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2 }}
+          onClick={() => setShowChunkBounds(v => !v)}
+          title={showChunkBounds ? 'Ocultar límites de chunks' : 'Mostrar límites de chunks'}
+          style={{
+            position: 'absolute', bottom: 20, left: 20, zIndex: 10,
+            width: 34, height: 34, borderRadius: 8,
+            background: showChunkBounds ? 'rgba(0,212,191,0.12)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${showChunkBounds ? 'rgba(0,212,191,0.4)' : 'var(--color-border-subtle)'}`,
+            color: showChunkBounds ? '#00d4bf' : 'var(--color-text-tertiary)',
+            fontSize: 15, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s',
+            fontFamily: 'var(--font-sans)',
+          }}
+        >
+          ▦
+        </motion.button>
+      )}
+
       {/* Bottom hint */}
-      {memories.length > 0 && (
+      {memoryIndex.length > 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -415,7 +479,7 @@ export default function BrainPage() {
       )}
 
       {/* Empty state */}
-      {!isLoading && memories.length === 0 && (
+      {!isLoading && memoryIndex.length === 0 && (
         <EmptyBrainState onNew={() => navigate('/memory/new')} />
       )}
     </div>
